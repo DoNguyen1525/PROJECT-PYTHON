@@ -3,8 +3,7 @@
 scripts/auto_download.py
 
 Purpose:
-  - Chạy tự động download hằng ngày cho CafeF data
-  - Có thể chạy như một dịch vụ hoặc định kỳ (cron job)
+  - Chạy tự động download hằng ngày cho CafeF dat
   - Tự động bỏ qua nếu đã tải ngày hiện tại/ngày hôm qua
   - Ghi log vào thư mục logs/
 
@@ -68,30 +67,77 @@ def run_downloader(date_str=None):
         return False
         
 def run_data_processor(date_str):
-    """Chạy data_processor.py để làm sạch và xử lý dữ liệu"""
-    DATA_PROCESSOR = ROOT / "scripts" / "data_processor.py"
-    if not DATA_PROCESSOR.exists():
-        logger.warning(f"Không tìm thấy file data_processor.py tại {DATA_PROCESSOR}")
+    """Chạy data_processor_historical.py để xử lý dữ liệu lịch sử"""
+    # Kiểm tra xem có dữ liệu historical không
+    historical_dir = ROOT / "staging" / date_str / "historical"
+    regular_dir = ROOT / "staging" / date_str / "raw"
+    
+    processor_script = None
+    input_dir = None
+    
+    if historical_dir.exists() and any(historical_dir.glob("*Upto*.csv")):
+        # Sử dụng processor cho dữ liệu historical
+        processor_script = ROOT / "scripts" / "data_processor_historical.py"
+        input_dir = historical_dir
+        logger.info("Detected historical data, using historical processor")
+    elif regular_dir.exists():
+        # Sử dụng processor thường
+        processor_script = ROOT / "scripts" / "data_processor.py"
+        input_dir = regular_dir
+        logger.info("Using regular data processor")
+    else:
+        logger.error("No data directories found")
         return False
     
-    input_dir = f"staging/{date_str}/raw"
-    output_dir = "parquet"
+    if not processor_script.exists():
+        logger.error(f"Processor script not found: {processor_script}")
+        return False
     
-    cmd = [sys.executable, str(DATA_PROCESSOR), input_dir, output_dir]
+    # Xác định đường dẫn output
+    parquet_dir = ROOT / "parquet"
     
-    logger.info(f"Chạy data_processor: {' '.join(cmd)}")
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        logger.info(f"Kết quả xử lý dữ liệu: [exitcode={result.returncode}]")
-        if result.stdout:
-            for line in result.stdout.splitlines():
-                logger.info(f"STDOUT: {line}")
-        if result.stderr:
-            for line in result.stderr.splitlines():
-                logger.error(f"STDERR: {line}")
-        return result.returncode == 0
+        logger.info(f"Running data processor: {processor_script}")
+        logger.info(f"Input dir: {input_dir}")
+        logger.info(f"Output dir: {parquet_dir}")
+        
+        cmd = [sys.executable, str(processor_script), str(input_dir), str(parquet_dir)]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=7200  # timeout 2 giờ cho dữ liệu lịch sử lớn
+        )
+        
+        # Ghi output vào log với phân loại đúng
+        if result.stdout.strip():
+            for line in result.stdout.strip().split('\n'):
+                if line.strip():
+                    logger.info(f"PROCESSOR OUTPUT: {line}")
+        
+        # Log từ data_processor thực ra là thông tin, không phải lỗi
+        if result.stderr.strip():
+            for line in result.stderr.strip().split('\n'):
+                if line.strip():
+                    # Phân biệt log messages vs real errors
+                    if any(keyword in line for keyword in ['Successfully', 'Updated', 'INFO', 'Created']):
+                        logger.info(f"PROCESSOR LOG: {line}")
+                    else:
+                        logger.warning(f"PROCESSOR STDERR: {line}")
+        
+        if result.returncode == 0:
+            logger.info("Data processor hoàn thành thành công")
+            return True
+        else:
+            logger.error(f"Data processor thất bại với exit code {result.returncode}")
+            return False
+            
+    except subprocess.TimeoutExpired:
+        logger.error("Data processor timeout sau 2 giờ")
+        return False
     except Exception as e:
-        logger.error(f"Lỗi chạy data_processor: {e}")
+        logger.error(f"Lỗi khi chạy data processor: {e}")
         return False
 
 def get_next_run_time(time_str):

@@ -247,7 +247,23 @@ def get_symbol(symbol: str, start: Optional[str] = None, end: Optional[str] = No
         df = df.sort_values("date")
         # compute sample indicators (or rely on precomputed columns)
         df['MA20'] = df['close'].rolling(20, min_periods=1).mean()
-        df['RSI14'] = 100.0 - (100.0 / (1.0 + df['close'].diff().clip(lower=0).ewm(alpha=1/14, adjust=False).mean() / ( -df['close'].diff().clip(upper=0).ewm(alpha=1/14, adjust=False).mean() )))
+        # Simplified RSI calculation to avoid division by zero
+        price_change = df['close'].diff()
+        gain = price_change.where(price_change > 0, 0)
+        loss = -price_change.where(price_change < 0, 0)
+        avg_gain = gain.ewm(alpha=1/14, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1/14, adjust=False).mean()
+        rs = avg_gain / avg_loss
+        df['RSI14'] = 100 - (100 / (1 + rs))
+        
+        # Replace any NaN or infinite values
+        df = df.fillna(0)
+        df = df.replace([float('inf'), float('-inf')], 0)
+        
         # Convert to records
     records = df.to_dict(orient="records")
     return {"symbol": symbol, "count": len(records), "data": records}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=9999)

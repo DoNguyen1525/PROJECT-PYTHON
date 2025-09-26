@@ -29,14 +29,17 @@ import requests
 from bs4 import BeautifulSoup  # pip install beautifulsoup4
 
 # ---------------- CONFIG ----------------
-ROOT = Path.cwd()
+# Get the script directory and project root
+SCRIPT_DIR = Path(__file__).parent.absolute()
+PROJECT_ROOT = SCRIPT_DIR.parent
+ROOT = PROJECT_ROOT
 STAGING = ROOT / "staging"
 META_DIR = ROOT / "metadata"
 MANIFEST_JSON = META_DIR / "ingest_manifest.json"
 DB_PATH = META_DIR / "downloaded_files.sqlite"
 
-# Template fallback URL (if scrape fails)
-TEMPLATE_URL = "https://cafef1.mediacdn.vn/data/ami_data/{date}/CafeF.SolieuGD.Upto{date}.zip"
+# Template fallback URL - Updated for historical data format
+TEMPLATE_URL = "https://cafef1.mediacdn.vn/data/ami_data/{date}/CafeF.SolieuGD.Upto{date_short}.zip"
 INDEX_PAGE = "https://cafef.vn/du-lieu/du-lieu-download.chn"
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
@@ -261,7 +264,9 @@ def main():
         if url:
             print("[main] found URL by scrape:", url)
     if not url:
-        url = TEMPLATE_URL.format(date=date_str)
+        # Format date for URL: 20250925 -> 25092025
+        date_formatted = date_str[-2:] + date_str[4:6] + date_str[:4]  # YYYYMMDD -> DDMMYYYY
+        url = TEMPLATE_URL.format(date=date_str, date_short=date_formatted)
         print("[main] using template URL:", url)
 
     # HEAD
@@ -278,20 +283,38 @@ def main():
     prev = manifest.get(date_str)
     skip = False
     if prev:
-        if remote_etag and prev.get("etag") == remote_etag:
-            print("[main] ETag matches previous -> skip")
-            skip = True
-        elif remote_lastmod and prev.get("last_modified") == remote_lastmod:
-            print("[main] Last-Modified matches previous -> skip")
-            skip = True
-        elif remote_len and prev.get("size") == remote_len:
-            print("[main] size matches previous -> skip")
-            skip = True
+        # Kiểm tra xem file thực tế có tồn tại không
+        prev_path = prev.get("path")
+        if prev_path and Path(prev_path).exists():
+            if remote_etag and prev.get("etag") == remote_etag:
+                print("[main] ETag matches previous -> skip")
+                skip = True
+            elif remote_lastmod and prev.get("last_modified") == remote_lastmod:
+                print("[main] Last-Modified matches previous -> skip")
+                skip = True
+            elif remote_len and prev.get("size") == remote_len:
+                print("[main] size matches previous -> skip")
+                skip = True
+        else:
+            # File không tồn tại, cần tải lại
+            print(f"[main] previous file not found at {prev_path}, will re-download")
+            prev = None  # Reset to force download
 
     staging_dir = STAGING / date_str
     staging_dir.mkdir(parents=True, exist_ok=True)
-    zip_name = f"CafeF.SolieuGD.Upto{date_str}.zip"
+    
+    # Extract filename from URL, fallback to default pattern
+    try:
+        from urllib.parse import urlparse
+        parsed_url = urlparse(url)
+        zip_name = Path(parsed_url.path).name
+        if not zip_name.endswith('.zip'):
+            zip_name = f"CafeF.SolieuGD.Upto{date_str}.zip"
+    except:
+        zip_name = f"CafeF.SolieuGD.Upto{date_str}.zip"
+    
     dest = staging_dir / zip_name
+    print(f"[main] destination: {dest}")
 
     entry = {
         "url": url,
