@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug FastAPI (uvicorn)",
+      "type": "python",
+      "request": "launch",
+      "program": "${command:python.interpreterPath}",
+      "args": [
+        "-m",
+        "uvicorn",
+        "scripts.api_demo:app",
+        "--reload",
+        "--port",
+        "${env:API_PORT}"
+      ],
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

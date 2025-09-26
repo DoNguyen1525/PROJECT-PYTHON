@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+*.egg
+
+# Logs
+logs/*
+!logs/.gitkeep
+*.log
+
+# Database
+metadata/*
+!metadata/.gitkeep
+*.sqlite
+*.sqlite-journal
+*.db
+
+# Data files
+staging/*
+!staging/.gitkeep
+parquet/*
+!parquet/.gitkeep
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# VS Code
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# macOS
+.DS_Store
+
+# Environment variables
+.env

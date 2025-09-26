@@ -1,0 +1,21 @@
+# core web
+fastapi==0.117.1
+uvicorn==0.37.0
+
+# data science / storage (prefer conda-forge for these binaries)
+pandas==2.3.2
+pyarrow>=14.0.1
+duckdb==1.4.0
+
+# db / orm
+SQLAlchemy==2.0.43
+
+# utilities
+python-dotenv==1.1.1
+tqdm==4.66.1
+
+# pin a stable pydantic that works with FastAPI <2.0
+pydantic>=1.10.24,<2.0.0
+
+# typing helpers
+typing-extensions>=4.15.0
