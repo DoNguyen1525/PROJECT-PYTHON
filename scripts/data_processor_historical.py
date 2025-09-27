@@ -9,8 +9,10 @@ Purpose:
   - Lưu trữ dưới dạng Parquet theo cấu trúc phân vùng theo năm
 
 Usage:
-  python scripts/data_processor_historical.py <input_dir> <output_dir>
-  python scripts/data_processor_historical.py staging/20250925/historical parquet
+  python scripts/data_processor_historical.py                                    # Sử dụng mặc định: staging/historical -> parquet
+  python scripts/data_processor_historical.py <input_dir>                       # Chỉ định input_dir, output_dir = parquet
+  python scripts/data_processor_historical.py <input_dir> <output_dir>          # Chỉ định cả hai
+  python scripts/data_processor_historical.py staging/historical parquet       # Ví dụ với tham số đầy đủ
 """
 
 import os
@@ -238,8 +240,10 @@ def process_directory(input_dir, output_dir):
 def parse_args():
     """Xử lý tham số dòng lệnh"""
     parser = argparse.ArgumentParser(description="Process historical stock data into Parquet format")
-    parser.add_argument("input_dir", help="Directory containing historical CSV files")
-    parser.add_argument("output_dir", help="Directory for output Parquet files")
+    parser.add_argument("input_dir", nargs='?', default="staging/historical", 
+                       help="Directory containing historical CSV files (default: staging/historical)")
+    parser.add_argument("output_dir", nargs='?', default="parquet", 
+                       help="Directory for output Parquet files (default: parquet)")
     parser.add_argument("--chunk-size", type=int, default=100000, help="Chunk size for processing large files")
     return parser.parse_args()
 

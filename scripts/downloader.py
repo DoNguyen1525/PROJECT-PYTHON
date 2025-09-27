@@ -34,6 +34,8 @@ SCRIPT_DIR = Path(__file__).parent.absolute()
 PROJECT_ROOT = SCRIPT_DIR.parent
 ROOT = PROJECT_ROOT
 STAGING = ROOT / "staging"
+DATA_DIR = STAGING / "Data"          # Thư mục chứa file ZIP raw
+HISTORICAL_DIR = STAGING / "historical"  # Thư mục chứa file CSV extracted (không có subfolder)
 META_DIR = ROOT / "metadata"
 MANIFEST_JSON = META_DIR / "ingest_manifest.json"
 DB_PATH = META_DIR / "downloaded_files.sqlite"
@@ -53,6 +55,8 @@ BACKOFF_INITIAL = 1.0
 def ensure_dirs():
     META_DIR.mkdir(parents=True, exist_ok=True)
     STAGING.mkdir(parents=True, exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)      # Tạo thư mục Data
+    HISTORICAL_DIR.mkdir(parents=True, exist_ok=True)  # Tạo thư mục historical
 
 def init_db():
     # Check if the database file exists and is valid
@@ -115,31 +119,33 @@ def parse_date_arg():
     return date_str
 
 def should_scrape():
-    return "--no-scrape" not in sys.argv
+    return "--no-scrape" not in sys.argv  # Scraping mặc định, tắt với --no-scrape
 
 def find_url_by_scrape(date_str):
     """
-    Scrape CafeF index page for links that contain date_str or Upto{date}
-    Return first suitable zip URL or None
+    Scrape CafeF download page for the Upto historical data file
+    Return the Upto zip URL or None
     """
     try:
         resp = requests.get(INDEX_PAGE, headers=HEADERS, timeout=20)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
-        candidates = []
+        
+        # Convert date format: YYYYMMDD -> DDMMYYYY for URL matching
+        date_formatted = date_str[-2:] + date_str[4:6] + date_str[:4]  # 20250925 -> 25092025
+        
+        # Look for Upto historical data links specifically
         for a in soup.find_all("a", href=True):
             href = a["href"]
-            if date_str in href or f"Upto{date_str}" in href or "SolieuGD" in href:
-                # make absolute
-                url = urljoin(INDEX_PAGE, href)
-                if url.endswith(".zip") or "ami_data" in url:
-                    candidates.append(url)
-        if candidates:
-            # prefer .zip explicit
-            for url in candidates:
+            # Tìm link có cả "Upto" và ngày cụ thể, ưu tiên "SolieuGD" (3 sàn)
+            if f"Upto{date_formatted}" in href and "SolieuGD" in href:
+                # make absolute URL
+                url = urljoin(INDEX_PAGE, href) if not href.startswith("http") else href
                 if url.endswith(".zip"):
+                    print(f"[scrape] found Upto file: {url}")
                     return url
-            return candidates[0]
+        
+        print(f"[scrape] no Upto file found for date {date_str}")
     except Exception as e:
         print("[scrape] error:", e)
     return None
@@ -313,7 +319,7 @@ def main():
     except:
         zip_name = f"CafeF.SolieuGD.Upto{date_str}.zip"
     
-    dest = staging_dir / zip_name
+    dest = DATA_DIR / zip_name  # Lưu ZIP vào Data/
     print(f"[main] destination: {dest}")
 
     entry = {
@@ -357,11 +363,10 @@ def main():
     entry["status"] = "downloaded"
 
     # extract
-    out_raw = staging_dir / "raw"
-    ok, members = extract_zip(dest, out_raw)
+    ok, members = extract_zip(dest, HISTORICAL_DIR)  # Extract trực tiếp vào historical/ (không tạo thư mục con)
     if ok:
         entry["members_count"] = len(members)
-        print(f"[main] extracted {len(members)} members to {out_raw}")
+        print(f"[main] extracted {len(members)} members to {HISTORICAL_DIR}")
     else:
         entry["status"] = "failed"
         entry["note"] = "extract_failed"
